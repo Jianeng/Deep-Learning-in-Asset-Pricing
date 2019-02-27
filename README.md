@@ -22,7 +22,7 @@ https://arxiv.org/abs/1805.01104
   - "target_return" (i.e. portoflio return)
   - "factor" (i.e. benchmark factors)
 
-* "layer_size": a list of hidden layer size where the last element is the number of deep factors to be constructed. 
+* "layer_size": a list of hidden layer size where the last element is the number of deep factors to be constructed. For example, [32,16,8,4,2].
 
 * "para": a dictionary of all training parameters. The keys are
   - "split": the way to split data into training set and test set. See "data_split" function.
