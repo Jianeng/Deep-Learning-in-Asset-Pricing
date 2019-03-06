@@ -10,7 +10,7 @@ T = M.shape[0] # number of periods
 data_input = dict(characteristics=Z, stock_return=R1, target_return=R2, factor=M[:, 0:3])
 
 # set parameters
-training_para = dict(epoch=50, train_ratio=0.6, split="future", activation=tf.nn.tanh)
+training_para = dict(epoch=50, train_ratio=0.6, split="future", activation=tf.nn.tanh, train_algo=tf.train.AdamOptimizer, learning_rate=0.005, batch_size=120)
 
 # design network layers
 layer_size = [64, 32, 16, 8, 4]
