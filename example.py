@@ -2,7 +2,7 @@ from DL_functions import *
 import numpy as np
 
 # load data
-Z = np.loadtxt("realZ_small.txt")
+Z = np.loadtxt("realZ_sample.txt")
 R1 = np.loadtxt("realstock_return.txt")
 R2 = np.loadtxt("realportfolio_return.txt")
 M = np.loadtxt("realMKT.txt")
