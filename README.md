@@ -8,7 +8,7 @@ https://arxiv.org/abs/1805.01104
 
 * "realstock_return.txt": a 516*1000 matrix of stock returns, which contains monthly excess returns of 1000 stocks.
 
-* "realZ_sample.txt": a 516*2000 matrix of stock charcteristics. The columns are size of stock 1, book to market ratio of stock 1, size of stock 2, book to market ratio of stock 2 ...
+* "realZ_sample.txt": a 516*2000 matrix of stock charcteristics. The columns are size of stock 1, size of stock 2, ..., book to market ratio of stock 1, book to market ratio of stock 2, ...
 
 * "realportfolio_return.txt": a 516*49 matrix of 49 Industry portfolio returns. 
 
