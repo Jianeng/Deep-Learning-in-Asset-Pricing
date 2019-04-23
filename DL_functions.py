@@ -167,7 +167,7 @@ def dl_alpha(data, layer_size, para, value_index, ens=1):
             f, beta_mid, [[1], [0]])
         target_ens = tf.tile(tf.expand_dims(
             target, axis=2), [1, 1, ens])
-        alpha_mid = tf.reduce_mean(target_ens - target_mid_hat, axis=1)
+        alpha_mid = tf.reduce_mean(target_ens - target_mid_hat, axis=0)
         alpha_mse = tf.reduce_mean(tf.square(alpha_mid))
 
         # define loss and training parameters
