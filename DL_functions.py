@@ -152,7 +152,7 @@ def dl_alpha(data, layer_size, para, value_index, ens=1):
         # sort deep characteristics
         w_trans = tf.transpose(layers_1[-1], [0, 2, 1])
 
-        w_tilde = value_sort(w_trans, value, 1, n)
+        w_tilde = value_sort(w_trans, value, fsort_number, n)
 
         # construct factors
         nobs = tf.shape(r)[0]
