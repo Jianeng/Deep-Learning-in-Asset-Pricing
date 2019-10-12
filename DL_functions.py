@@ -74,45 +74,13 @@ def get_batch(total, batch_number):
     return batch
 
 
-def value_sort(weight, value, n_factor, n_firm, prop=0.2):
-    '''
-    creating long-short portfolio weight via sorting
-    :param weight: input characteristics
-    :param value: market equity of stocks
-    :param n_factor: number of factors
-    :param n_firm: number of stocks
-    :param prop: top/bottom proportion of stock universe to be selected
-    :return: long-short weight
-    '''
-
-    a1, _ = tf.nn.top_k(weight, int(n_firm * prop))
-    top_breakpoint = tf.reduce_min(a1, axis=2, keepdims=True)
-    a2, _ = tf.nn.top_k(weight, int(n_firm * (1 - prop)))
-    bottom_breakpoint = tf.reduce_min(a2, axis=2, keepdims=True)
-
-    top = 0.5 * tf.nn.tanh(10000 * (weight - top_breakpoint)) + 0.5
-    bottom = 0.5 - 0.5 * tf.nn.tanh(10000 * (weight - bottom_breakpoint))
-
-    value_diag = tf.tile(tf.expand_dims(value, axis=1), [1, n_factor, 1])
-
-    top_prep = top * value_diag
-    top = top_prep / tf.maximum(tf.reduce_sum(top_prep, 2, keepdims=True), 1)
-    bottom_prep = bottom * value_diag
-    bottom = bottom_prep / \
-        tf.maximum(tf.reduce_sum(bottom_prep, 2, keepdims=True), 1)
-    final_weight = top - bottom
-
-    return final_weight
-
-
-def dl_alpha(data, layer_size, para, value_index, ens=1):
+def dl_alpha(data, layer_size, para):
     '''
     construct deep factors
     :param data: a dict of input data
     :param layer_size: a list of neural layer sizes (from bottom to top)
     :param para: training and tuning parameters
     :param value_index: index of market equity in the characteristic dataset (which column)
-    :param ens: size of ensembles
     :return: constructed deep factors and loss/alpha_loss paths
     '''
 
@@ -129,17 +97,9 @@ def dl_alpha(data, layer_size, para, value_index, ens=1):
     r = tf.placeholder(tf.float32, [None, None])
     target_org = tf.placeholder(tf.float32, [None, port_n])
     m = tf.placeholder(tf.float32, [None, ff_n])
-    value = z[:, :, value_index]
 
     # create graph for sorting
     with tf.name_scope('sorting_network'):
-        # subtract gamma*benchmark from excess stock returns and keep the residual for deep factor construction
-        gamma = tf.Variable(tf.random_normal([ff_n, port_n, ens]))
-        target_gamma_hat = tf.tensordot(m, gamma, [[1], [0]])
-        target_gamma_ens = tf.tile(
-            tf.expand_dims(target_org, axis=2), [1, 1, ens])
-        target = tf.reduce_mean(target_gamma_ens - target_gamma_hat, axis=2)
-
         # add 1st network (prior to sorting)
         layer_number_tanh = layer_size.__len__()
         layer_size = np.insert(layer_size, 0, p)
@@ -149,10 +109,11 @@ def dl_alpha(data, layer_size, para, value_index, ens=1):
                 layers_1[i], layer_size[i], layer_size[i + 1], para['activation'])
             layers_1.append(new_layer)
 
-        # sort deep characteristics
-        w_trans = tf.transpose(layers_1[-1], [0, 2, 1])
-
-        w_tilde = value_sort(w_trans, value, fsort_number, n)
+        # softmax rank weight
+        normalized_char = tf.keras.layers.BatchNormalization(axis=1)(layers_1[-1], training=True)
+        transformed_char_a = -50*tf.exp(-5*normalized_char)
+        transformed_char_b = -50*tf.exp(5*normalized_char)
+        w_tilde = tf.transpose(tf.nn.softmax(transformed_char_a, axis=1) - tf.nn.softmax(transformed_char_b, axis=1), [0,2,1])
 
         # construct factors
         nobs = tf.shape(r)[0]
@@ -160,21 +121,16 @@ def dl_alpha(data, layer_size, para, value_index, ens=1):
         f_tensor = tf.matmul(w_tilde, r_tensor)
         f = tf.reshape(f_tensor, [nobs, fsort_number])
 
-        # forecast return and alpha
-        beta_mid = tf.Variable(tf.random_normal(
-            [layer_size[-1], port_n, ens]))
-        target_mid_hat = tf.tensordot(
-            f, beta_mid, [[1], [0]])
-        target_ens = tf.tile(tf.expand_dims(
-            target, axis=2), [1, 1, ens])
-        alpha_mid = tf.reduce_mean(target_ens - target_mid_hat, axis=0)
-        alpha_mse = tf.reduce_mean(tf.square(alpha_mid))
+        # forecast  and alpha
+        beta = tf.Variable(tf.random_normal([layer_size[-1], port_n]))
+        gamma = tf.Variable(tf.random_normal([ff_n, port_n]))
+        target_hat = tf.matmul(f, beta) + tf.matmul(m, gamma)
+        alpha  = tf.reduce_mean(target - target_hat,axis=0) 
 
         # define loss and training parameters
-        loss_mid = tf.losses.mean_squared_error(
-            target_ens, target_mid_hat)
-        train_mid = para['train_algo'](
-            para['learning_rate']).minimize(loss_mid)
+        zero = tf.zeros([port_n,])
+        loss = tf.losses.mean_squared_error(target, target_hat) + para['Lambda']*tf.losses.mean_squared_error(zero, alpha)
+        train = para['train_algo'](para['learning_rate']).minimize(loss)
 
     batch_number = int(t_train / para['batch_size'])
     alpha_path = []
@@ -208,56 +164,3 @@ def dl_alpha(data, layer_size, para, value_index, ens=1):
             f, feed_dict={z: z_test, r: r_test, target_org: target_test, m: m_test})
 
         return factor, factor_oos, alpha_path, loss_path
-
-
-def dl_conditional(fg_in, fg_out, return_in, return_out, nrelu, para):
-    '''
-    conditional factor model via ReLU network
-    :param fg_in: in-sample deep + benchmark factors
-    :param fg_out: out-of-sample deep + benchmark factors
-    :param return_in: in-sample target returns
-    :param return_out: out-of-sample target returns
-    :param nrelu: number of ReLU units
-    :param para: training and tuning parameters
-    :return: in-sample and out-of-sample predictions
-    '''
-
-    t, p = fg_in.shape
-    k = return_in.shape[1]
-
-    X = tf.placeholder(tf.float32, [None, p])
-    Y = tf.placeholder(tf.float32, [None, k])
-
-    w1 = tf.Variable(tf.random_normal([p, nrelu]))
-    w2 = tf.Variable(tf.random_normal([nrelu, k]))
-
-    Z = tf.nn.relu(tf.matmul(X, w1))
-    Yhat = tf.matmul(Z, w2)
-    loss = tf.losses.mean_squared_error(Y, Yhat)
-    train = para['train_algo'](para['learning_rate']).minimize(loss)
-
-    batch_number = int(t / para['batch_size'])
-    loss_path = []
-
-    with tf.Session() as sess:
-
-        sess.run(tf.global_variables_initializer())
-
-        # train ReLU network
-        for i in range(epoch):
-            batch = get_batch(t, batch_number)
-
-            for idx in range(batch_number):
-                sess.run(train, feed_dict={
-                         X: fg_in[batch[idx]], Y: return_in[batch[idx]]})
-
-            current_loss = sess.run(loss, feed_dict={X: fg_in, Y: return_in})
-            print("current epoch:", i,
-                  "; current loss:", current_loss)
-            loss_path.append(current_loss)
-
-        insample_prediction = sess.run(
-            Yhat, feed_dict={X: fg_in, Y: return_in})
-        oos_prediction = sess.run(Yhat, feed_dict={X: fg_out, Y: return_out})
-
-    return insample_prediction, oos_prediction, loss_path
