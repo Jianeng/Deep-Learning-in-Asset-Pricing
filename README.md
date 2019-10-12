@@ -1,4 +1,4 @@
-# Deep-Learning-in-Asset-Pricing
+# Deep Learning in Characteristics-Sorted Factor Models
 https://arxiv.org/abs/1805.01104
 
 # Example Data Description
@@ -31,8 +31,6 @@ https://arxiv.org/abs/1805.01104
   - "train_algo": optimization method. For example, tf.train.AdamOptimizer.
   - "learning_rate": parameter for "train_algo".
   - "activation": activation function when constructing deep characteristics. For example, tf.nn.tanh.
-  - "value_index": index of stock value. For example, if value is the first characteristics, then value_index=0
-  - "ens": the number of ensambles.
   - "epoch": the number of epochs for training.
   
 ## Output
