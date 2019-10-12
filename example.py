@@ -16,4 +16,4 @@ training_para = dict(epoch=50, train_ratio=0.6, split="future", activation=tf.nn
 layer_size = [64, 32, 16, 8, 4]
 
 # construct deep factors
-f, f_oos, alpha, loss = dl_alpha(data_input, layer_size, training_para, value_index=0, ens=100)
+f, f_oos, alpha, loss = dl_alpha(data_input, layer_size, training_para)
