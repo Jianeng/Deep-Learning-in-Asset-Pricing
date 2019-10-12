@@ -1,4 +1,4 @@
-# copy right @ Feng, Polson, and Xu "Deep Learning in Asset Pricing" (2019)
+# copy right @ Feng, Polson, and Xu "Deep Learning in Characteristics-Sorted Factor Models" (2019)
 
 import numpy as np
 import tensorflow as tf
