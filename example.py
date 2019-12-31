@@ -17,5 +17,5 @@ training_para = dict(epoch=50, train_ratio=1, train_algo=tf.train.AdamOptimizer,
 layer_size = [64, 32, 16, 8, 4]
 
 # construct deep factors
-f, f_oos, alpha, loss = dl_alpha(data_input, layer_size, training_para)
+f, f_oos, loss = dl_alpha(data_input, layer_size, training_para)
 
