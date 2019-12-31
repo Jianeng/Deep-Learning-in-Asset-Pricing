@@ -39,7 +39,5 @@ https://arxiv.org/abs/1805.01104
 
 * "factor_oos": deep factors in test periods.
 
-* "alpha_path": the mse values of alpha (defined in Section 2.1 in paper) during training.  
-
 * "loss_path": the loss during training.
   
