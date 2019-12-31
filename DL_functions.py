@@ -81,7 +81,7 @@ def dl_alpha(data, layer_size, para):
     :param layer_size: a list of neural layer sizes (from bottom to top)
     :param para: training and tuning parameters
     :param value_index: index of market equity in the characteristic dataset (which column)
-    :return: constructed deep factors and loss/alpha_loss paths
+    :return: constructed deep factors and loss paths
     '''
 
     # split data to training sample and test sample
@@ -95,7 +95,7 @@ def dl_alpha(data, layer_size, para):
     # create deep learning graph
     z = tf.placeholder(tf.float32, [None, n, p])
     r = tf.placeholder(tf.float32, [None, None])
-    target_org = tf.placeholder(tf.float32, [None, port_n])
+    target = tf.placeholder(tf.float32, [None, port_n])
     m = tf.placeholder(tf.float32, [None, ff_n])
 
     # create graph for sorting
@@ -133,7 +133,6 @@ def dl_alpha(data, layer_size, para):
         train = para['train_algo'](para['learning_rate']).minimize(loss)
 
     batch_number = int(t_train / para['batch_size'])
-    alpha_path = []
     loss_path = []
 
     # SGD training
@@ -146,21 +145,20 @@ def dl_alpha(data, layer_size, para):
             batch = get_batch(t_train, batch_number)
 
             for idx in range(batch_number):
-                sess.run(train_mid, feed_dict={
-                    z: z_train[batch[idx]], r: r_train[batch[idx]], target_org: target_train[batch[idx]],
+                sess.run(train, feed_dict={
+                    z: z_train[batch[idx]], r: r_train[batch[idx]], target: target_train[batch[idx]],
                     m: m_train[batch[idx]]})
 
-            current_loss, current_alpha = sess.run(
-                [loss_mid, alpha_mse], feed_dict={z: z_train, r: r_train, target_org: target_train, m: m_train})
+            current_loss = sess.run(
+                loss, feed_dict={z: z_train, r: r_train, target: target_train, m: m_train})
             print("current epoch:", i,
                   "; current loss:", current_loss)
-            alpha_path.append(current_alpha)
             loss_path.append(current_loss)
 
         # save constructed sort factors
         factor = sess.run(
-            f, feed_dict={z: z_train, r: r_train, target_org: target_train, m: m_train})
+            f, feed_dict={z: z_train, r: r_train, target: target_train, m: m_train})
         factor_oos = sess.run(
-            f, feed_dict={z: z_test, r: r_test, target_org: target_test, m: m_test})
+            f, feed_dict={z: z_test, r: r_test, target: target_test, m: m_test})
 
-        return factor, factor_oos, alpha_path, loss_path
+        return factor, factor_oos, loss_path
