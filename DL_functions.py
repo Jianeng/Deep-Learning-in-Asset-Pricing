@@ -100,9 +100,8 @@ def dl_alpha(data, layer_size, para):
     m = tf.placeholder(tf.float32, [None, ff_n])
 
     # create graph for sorting
-    with tf.name_scope('sorting_network'):
+    with tf.compat.v1.name_scope('sorting_network'):
         # subtract gamma*benchmark from excess stock returns and keep the residual for deep factor construction
-        gamma = tf.Variable(tf.random_normal([ff_n, port_n]))
 
         # add 1st network (prior to sorting)
         layer_number_tanh = layer_size.__len__()
@@ -121,7 +120,7 @@ def dl_alpha(data, layer_size, para):
         normalized_char = (layers_1[-1] - mean)/(tf.sqrt(var)+0.00001)
         transformed_char_a = -50*tf.exp(-5*normalized_char)
         transformed_char_b = -50*tf.exp(5*normalized_char)
-        w_tilde = tf.transpose(tf.nn.softmax(transformed_char_a, dim=1) - tf.nn.softmax(transformed_char_b, dim=1), [0,2,1])
+        w_tilde = tf.transpose(a=tf.nn.softmax(transformed_char_a, axis=1) - tf.nn.softmax(transformed_char_b, axis=1), perm=[0,2,1])
 
         # construct factors
         nobs = tf.shape(r)[0]
@@ -131,13 +130,14 @@ def dl_alpha(data, layer_size, para):
 
         # forecast return and alpha
         beta = tf.Variable(tf.random_normal([layer_size[-1], port_n]))
+        gamma = tf.Variable(tf.random_normal([ff_n, port_n]))
         target_hat = tf.matmul(f, beta) + tf.matmul(m, gamma)
         alpha  = tf.reduce_mean(target - target_hat,axis=0) 
 
         # define loss and training parameters
         zero = tf.zeros([port_n,])
-        loss1 = tf.losses.mean_squared_error(target, target_hat)
-        loss2 = tf.losses.mean_squared_error(zero, alpha)
+        loss1 = tf.compat.v1.losses.mean_squared_error(target, target_hat)
+        loss2 = tf.compat.v1.losses.mean_squared_error(zero, alpha)
         loss = loss1 + para['Lambda']*loss2 + para['Lambda2']*weights_l1
         train = para['train_algo'](para['learning_rate']).minimize(loss)
 
