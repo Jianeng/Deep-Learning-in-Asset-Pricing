@@ -12,10 +12,10 @@ data_input = dict(characteristics=Z, stock_return=R1, target_return=R2, factor=M
 # set parameters
 training_para = dict(epoch=50, train_ratio=1, train_algo=tf.train.AdamOptimizer,
                      split="future", activation=tf.nn.tanh, start=1, batch_size=120, learning_rate=0.005,
-                     Lambda=1)
+                     Lambda=1, Lambda2=1)
 # design network layers
 layer_size = [64, 32, 16, 8, 4]
 
 # construct deep factors
-f, f_oos, loss = dl_alpha(data_input, layer_size, training_para)
+f, char = dl_alpha(data_input, layer_size, training_para)
 
