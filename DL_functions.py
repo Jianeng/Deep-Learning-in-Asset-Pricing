@@ -80,14 +80,15 @@ def dl_alpha(data, layer_size, para):
     :param data: a dict of input data
     :param layer_size: a list of neural layer sizes (from bottom to top)
     :param para: training and tuning parameters
-    :param value_index: index of market equity in the characteristic dataset (which column)
-    :return: constructed deep factors and loss paths
+    :return: constructed deep factors and deep characteristics
     '''
-
+    print(tf.__version__)
     # split data to training sample and test sample
     z_train, r_train, m_train, target_train, z_test, r_test, m_test, target_test, ff_n, port_n, t_train, n, p = \
         data_split(data['characteristics'], data['stock_return'], data['factor'], data['target_return'],
                    para['train_ratio'], para['split'])
+
+    n_train = r_train.shape[0]
 
     # the last element of layer_size is the number of deep factors
     fsort_number = layer_size[-1]
@@ -100,20 +101,27 @@ def dl_alpha(data, layer_size, para):
 
     # create graph for sorting
     with tf.name_scope('sorting_network'):
+        # subtract gamma*benchmark from excess stock returns and keep the residual for deep factor construction
+        gamma = tf.Variable(tf.random_normal([ff_n, port_n]))
+
         # add 1st network (prior to sorting)
         layer_number_tanh = layer_size.__len__()
         layer_size = np.insert(layer_size, 0, p)
         layers_1 = [z]
+        weights_l1 = tf.constant(0.0)
         for i in range(layer_number_tanh):
-            new_layer = add_layer_1(
+            new_layer, weights, wxb = add_layer_1(
                 layers_1[i], layer_size[i], layer_size[i + 1], para['activation'])
             layers_1.append(new_layer)
+            if i < layer_number_tanh -1:
+                weights_l1 += (tf.reduce_sum(tf.abs(weights)) - tf.reduce_sum(tf.abs(tf.linalg.diag_part(weights))))
 
-        # softmax rank weight
-        normalized_char = tf.keras.layers.BatchNormalization(axis=1)(layers_1[-1], training=True)
+        # softmax for factorweight
+        mean, var = tf.nn.moments(layers_1[-1],axes=1,keep_dims=True)
+        normalized_char = (layers_1[-1] - mean)/(tf.sqrt(var)+0.00001)
         transformed_char_a = -50*tf.exp(-5*normalized_char)
         transformed_char_b = -50*tf.exp(5*normalized_char)
-        w_tilde = tf.transpose(tf.nn.softmax(transformed_char_a, axis=1) - tf.nn.softmax(transformed_char_b, axis=1), [0,2,1])
+        w_tilde = tf.transpose(tf.nn.softmax(transformed_char_a, dim=1) - tf.nn.softmax(transformed_char_b, dim=1), [0,2,1])
 
         # construct factors
         nobs = tf.shape(r)[0]
@@ -121,19 +129,23 @@ def dl_alpha(data, layer_size, para):
         f_tensor = tf.matmul(w_tilde, r_tensor)
         f = tf.reshape(f_tensor, [nobs, fsort_number])
 
-        # forecast  and alpha
+        # forecast return and alpha
         beta = tf.Variable(tf.random_normal([layer_size[-1], port_n]))
-        gamma = tf.Variable(tf.random_normal([ff_n, port_n]))
         target_hat = tf.matmul(f, beta) + tf.matmul(m, gamma)
         alpha  = tf.reduce_mean(target - target_hat,axis=0) 
 
         # define loss and training parameters
         zero = tf.zeros([port_n,])
-        loss = tf.losses.mean_squared_error(target, target_hat) + para['Lambda']*tf.losses.mean_squared_error(zero, alpha)
+        loss1 = tf.losses.mean_squared_error(target, target_hat)
+        loss2 = tf.losses.mean_squared_error(zero, alpha)
+        loss = loss1 + para['Lambda']*loss2 + para['Lambda2']*weights_l1
         train = para['train_algo'](para['learning_rate']).minimize(loss)
 
     batch_number = int(t_train / para['batch_size'])
     loss_path = []
+    early_stopping = 10
+    thresh = 0.000005
+    stop_flag = 0
 
     # SGD training
     with tf.Session() as sess:
@@ -149,16 +161,38 @@ def dl_alpha(data, layer_size, para):
                     z: z_train[batch[idx]], r: r_train[batch[idx]], target: target_train[batch[idx]],
                     m: m_train[batch[idx]]})
 
-            current_loss = sess.run(
-                loss, feed_dict={z: z_train, r: r_train, target: target_train, m: m_train})
+            current_loss, current_loss1, current_loss2, current_loss3 = sess.run(
+                [loss, loss1, loss2, weights_l1], feed_dict={z: z_train, r: r_train, target: target_train, m: m_train})
             print("current epoch:", i,
-                  "; current loss:", current_loss)
+                  "; current loss1:", current_loss1, "; current_loss2:", current_loss2,
+                  "; current loss3:", current_loss3)
             loss_path.append(current_loss)
 
+            if np.isnan(current_loss):
+                break
+
+            if i > 0:
+                if loss_path[i-1] - loss_path[i] < thresh:
+                    stop_flag += 1
+                else:
+                    stop_flag = 0
+                if stop_flag >= early_stopping:
+                    print('Early stopping at epoch:', i)
+                    break
+
+
         # save constructed sort factors
-        factor = sess.run(
+        factor_in = sess.run(
             f, feed_dict={z: z_train, r: r_train, target: target_train, m: m_train})
-        factor_oos = sess.run(
+        factor_out = sess.run(
             f, feed_dict={z: z_test, r: r_test, target: target_test, m: m_test})
 
-        return factor, factor_oos, loss_path
+        # characteristics
+
+        deep_char = sess.run(layers_1[-1], feed_dict={z: np.concatenate((z_train,z_test),axis=0)})
+        
+
+    factor = np.concatenate((factor_in,factor_out),axis=0)
+    nt, nnn, pp = deep_char.shape
+    deep_char = deep_char.reshape(nt*nnn, pp)
+    return factor, deep_char
