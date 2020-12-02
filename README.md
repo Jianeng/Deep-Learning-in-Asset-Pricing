@@ -32,12 +32,14 @@ https://arxiv.org/abs/1805.01104
   - "learning_rate": parameter for "train_algo".
   - "activation": activation function when constructing deep characteristics. For example, tf.nn.tanh.
   - "epoch": the number of epochs for training.
-  
+  - "Lambda": tunning parameter for pricing error regularization
+  - "Lambda2": tuning parameter for weight matrix regularization
+
 ## Output
 
-* "factor": deep factors in training periods.
+* "factor": deep factors
 
-* "factor_oos": deep factors in test periods.
+* "deep_char": deep characteristics
 
-* "loss_path": the loss during training.
+
   
